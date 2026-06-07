@@ -14,59 +14,39 @@ def home():
 @app.route('/goal')
 def get_goal():
     try:
-        # Fetch your Ko-fi goal page
-        response = requests.get('https://ko-fi.com/panyel/goal', timeout=10)
+        # Fetch the main page (not /goal)
+        response = requests.get('https://ko-fi.com/panyel', timeout=10)
         soup = BeautifulSoup(response.text, 'html.parser')
         
-        # Find the goal percentage text
-        goal_text = None
+        # Find the goal label element
+        goal_label = soup.find('span', {'id': 'profileGoalTotal'})
+        if not goal_label:
+            # Fallback: look for any element containing "of €" and "goal"
+            goal_label = soup.find(string=re.compile(r'of\s*€\d+\s*goal', re.IGNORECASE))
         
-        # Method 1: Look for the progress bar text
-        progress_bar = soup.find('div', {'class': 'progress-bar'})
-        if progress_bar:
-            width = progress_bar.get('style', '')
-            match = re.search(r'width:\s*(\d+(?:\.\d+)?)%', width)
-            if match:
-                percentage = float(match.group(1))
-                return jsonify({
-                    'success': True,
-                    'percentage': percentage,
-                    'message': f'Goal is {percentage}% complete'
-                })
-        
-        # Method 2: Look for the goal label text
-        goal_label = soup.find('span', {'class': 'goal-label'})
         if goal_label:
-            goal_text = goal_label.text
-        
-        # Method 3: Look for any text with the pattern
-        if not goal_text:
-            all_text = soup.get_text()
-            match = re.search(r'(\d+(?:\.\d+)?)%', all_text)
+            text = goal_label.get_text() if hasattr(goal_label, 'get_text') else str(goal_label)
+            # Example text: "0% of €50 goal" or "25% of €50 goal"
+            match = re.search(r'(\d+(?:\.\d+)?)%\s+of\s+€(\d+(?:\.\d+)?)', text)
             if match:
-                percentage = float(match.group(1))
+                percent = float(match.group(1))
+                goal = float(match.group(2))
+                # We don't have the current amount, but we can compute it if needed
+                current = (percent / 100) * goal
                 return jsonify({
                     'success': True,
-                    'percentage': percentage,
-                    'message': 'Goal progress found'
+                    'percentage': percent,
+                    'current': round(current, 2),
+                    'goal': goal
                 })
         
-        # If we found text but no percentage yet
-        if goal_text:
-            match = re.search(r'(\d+(?:\.\d+)?)', goal_text)
-            if match:
-                percentage = float(match.group(1))
-                return jsonify({
-                    'success': True,
-                    'percentage': percentage,
-                    'raw_text': goal_text
-                })
-        
-        # Default response if no goal is set up
+        # If everything fails, return a default
         return jsonify({
             'success': True,
             'percentage': 0,
-            'message': 'No active goal found. Set up a goal on Ko-fi!'
+            'current': 0,
+            'goal': 50,
+            'message': 'Goal text not found on page'
         })
         
     except Exception as e:

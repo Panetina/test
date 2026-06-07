@@ -14,35 +14,35 @@ def home():
 @app.route('/goal')
 def get_goal():
     try:
-        response = requests.get('https://ko-fi.com/panyel', timeout=10)
+        # Fetch the main page (not /goal)
+        url = 'https://ko-fi.com/panyel'
+        response = requests.get(url, timeout=10)
         soup = BeautifulSoup(response.text, 'html.parser')
-        
-        # Try multiple methods to find the percentage
-        
-        # Method 1: Look for the progress bar width
-        progress_bar = soup.find('div', class_='progress-bar')
-        if progress_bar:
-            style = progress_bar.get('style', '')
-            match = re.search(r'width:\s*(\d+(?:\.\d+)?)%', style)
+
+        # Look for the percentage text inside a span with class 'kfds-font-bold'
+        # It appears as "2% " (with a space)
+        percent_span = soup.find('span', class_='kfds-font-bold')
+        if percent_span:
+            text = percent_span.get_text(strip=True)
+            # Extract the number (e.g., "2%" -> 2)
+            match = re.search(r'(\d+(?:\.\d+)?)%', text)
             if match:
                 percent = float(match.group(1))
-                # Get goal amount
-                goal_label = soup.find('span', {'id': 'profileGoalTotal'})
-                goal = 50
+                # Also extract the goal amount from the goal label
+                goal_label = soup.find('span', id='profileGoalTotal')
                 if goal_label:
-                    text = goal_label.get_text()
-                    match_goal = re.search(r'€(\d+)', text)
-                    if match_goal:
-                        goal = float(match_goal.group(1))
-                current = (percent / 100) * goal
-                return jsonify({
-                    'success': True,
-                    'percentage': percent,
-                    'current': round(current, 2),
-                    'goal': goal
-                })
-        
-        # Method 2: Look for percentage text
+                    goal_text = goal_label.get_text()
+                    goal_match = re.search(r'€(\d+)', goal_text)
+                    if goal_match:
+                        goal = float(goal_match.group(1))
+                        current = (percent / 100) * goal
+                        return jsonify({
+                            'success': True,
+                            'percentage': percent,
+                            'current': round(current, 2),
+                            'goal': goal
+                        })
+        # If the above fails, fallback to searching the whole page text
         all_text = soup.get_text()
         match = re.search(r'(\d+(?:\.\d+)?)%\s+of\s+€(\d+)', all_text)
         if match:
@@ -55,30 +55,14 @@ def get_goal():
                 'current': round(current, 2),
                 'goal': goal
             })
-        
-        # Method 3: Look for any percentage number near the goal
-        goal_label = soup.find('span', {'id': 'profileGoalTotal'})
-        if goal_label:
-            text = goal_label.get_text()
-            match = re.search(r'€(\d+)', text)
-            if match:
-                goal = float(match.group(1))
-                # No percentage found, return 0
-                return jsonify({
-                    'success': True,
-                    'percentage': 0,
-                    'current': 0,
-                    'goal': goal
-                })
-        
+        # If still nothing, return a default (goal not active)
         return jsonify({
             'success': True,
             'percentage': 0,
             'current': 0,
             'goal': 50,
-            'message': 'Could not parse goal data'
+            'message': 'No active goal found on Ko-fi page'
         })
-        
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)}), 500
 

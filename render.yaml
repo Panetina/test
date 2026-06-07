@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: kofi-goal-api
+    runtime: python
+    repo: https://github.com/yourusername/kofi-goal-api
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn wsgi:app
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.0
